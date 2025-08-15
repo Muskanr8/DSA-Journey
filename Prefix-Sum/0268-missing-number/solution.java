@@ -3,10 +3,9 @@ class Solution {
         int n = nums.length;
         int sum1 = (n * (n + 1)) / 2;
 
-        int sum2 = 0;
-        for(int i = 0; i < n; i += 1){
-            sum2 += nums[i];
+        for(int i = 0; i < nums.length; i += 1){
+            sum1 -= nums[i];
         }
-        return sum1 - sum2;
+        return sum1;
     }
 }
