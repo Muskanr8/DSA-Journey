@@ -1,18 +1,19 @@
 class Solution {
     public int numRescueBoats(int[] people, int limit) {
         Arrays.sort(people);
-        int n = people.length;
-        int boats = 0;
-        int i = 0;
-        int j = n - 1;
-
+        int i = 0, j = people.length - 1, c = 0;
         while(i <= j){
-            if(people[i] + people[j] <= limit){
-                i += 1;
+            int sum = people[i] + people[j];
+            if(sum <= limit){
+                c++;
+                i++;
+                j--;
             }
-            j -= 1;
-            boats += 1;
+            else if(sum > limit){
+                c++;
+                j--;
+            }
         }
-        return boats;
+        return c;
     }
 }
