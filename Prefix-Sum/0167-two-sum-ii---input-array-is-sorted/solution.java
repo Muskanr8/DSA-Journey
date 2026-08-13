@@ -1,22 +1,18 @@
 class Solution {
     public int[] twoSum(int[] numbers, int target) {
-        int n = numbers.length;
-        int[] res = new int[2];
-        int i = 0, j = n - 1;
-        while(i <= j){
+        int i = 0, j = numbers.length - 1;
+        while(i < j){
             int sum = numbers[i] + numbers[j];
             if(sum == target){
-                res[0] = i + 1;
-                res[1] = j + 1;
-                break;
+                return new int[] {i + 1, j + 1};
             }
             else if(sum > target){
-                j -= 1;
+                j--;
             }
-            else{
-                i += 1;
+            else if(sum < target){
+                i++;
             }
         }
-        return res;
+        return new int[] {-1, -1};
     }
 }
