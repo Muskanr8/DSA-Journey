@@ -53,15 +53,38 @@ for (const submission of submissions) {
     continue;
   }
 
-  const questionId =
-    detail.question?.questionFrontendId ??
-    submission.questionFrontendId ??
-    "unknown";
+const titleSlug =
+  submission.titleSlug ??
+  detail.question?.titleSlug ??
+  `submission-${id}`;
 
-  const titleSlug =
-    detail.question?.titleSlug ??
-    submission.titleSlug ??
-    `submission-${id}`;
+const questionResponse = await fetch("https://leetcode.com/graphql", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Cookie: `LEETCODE_SESSION=${SESSION}`,
+  },
+  body: JSON.stringify({
+    operationName: "questionData",
+    variables: {
+      titleSlug,
+    },
+    query: `
+      query questionData($titleSlug: String!) {
+        question(titleSlug: $titleSlug) {
+          questionFrontendId
+          title
+          titleSlug
+        }
+      }
+    `,
+  }),
+});
+
+const questionData = await questionResponse.json();
+
+const questionId =
+  questionData?.data?.question?.questionFrontendId ?? "unknown";
 
   const language = String(detail.lang ?? submission.lang ?? "").toLowerCase();
 
