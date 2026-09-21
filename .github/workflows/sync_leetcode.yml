@@ -13,12 +13,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Sync LeetCode submissions
-        uses: joshcai/leetcode-sync@v1.7
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          github-token: ${{ github.token }}
-          leetcode-csrf-token: ${{ secrets.LEETCODE_CSRF_TOKEN }}
-          leetcode-session: ${{ secrets.LEETCODE_SESSION }}
-          destination-folder: LeetCode-Questions
-          verbose: true
-          commit-header: "[LeetCode Sync]"
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install LeetCode Query
+        run: npm install leetcode-query
+
+      - name: Sync accepted LeetCode solutions
+        env:
+          LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
+        run: node sync-leetcode.mjs
