@@ -63,7 +63,7 @@ for (const submission of submissions) {
     submission.titleSlug ??
     `submission-${id}`;
 
-  const language = (detail.lang ?? submission.lang ?? "").toLowerCase();
+  const language = String(detail.lang ?? submission.lang ?? "").toLowerCase();
 
   const extensionMap = {
     java: "java",
