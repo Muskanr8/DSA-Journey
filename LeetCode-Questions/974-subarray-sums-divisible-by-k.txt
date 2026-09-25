@@ -1,0 +1,25 @@
+class Solution {
+    public int subarraysDivByK(int[] nums, int k) {
+
+        int prefix = 0;
+        int answer = 0;
+
+        Map<Integer, Integer> map = new HashMap<>();
+        map.put(0, 1);
+
+        for (int num : nums) {
+
+            prefix += num;
+
+            int rem = ((prefix % k) + k) % k;
+
+            int count = map.getOrDefault(rem, 0);
+
+            answer += count;
+
+            map.put(rem, count + 1);
+        }
+
+        return answer;
+    }
+}
