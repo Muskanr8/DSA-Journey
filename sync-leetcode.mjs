@@ -121,12 +121,13 @@ const questionId =
 console.log(`Finished. Added ${added} new solution(s).`);
 
 if (added > 0) {
-  execSync("git config user.name 'github-actions[bot]'");
+  execSync("git config user.name 'Muskan Shaik'");
   execSync(
-    "git config user.email '41898282+github-actions[bot]@users.noreply.github.com'"
+    "git config user.email '129413369+Muskanr8@users.noreply.github.com'"
   );
 
   execSync("git add LeetCode-Questions");
+  
 
   try {
     execSync(
