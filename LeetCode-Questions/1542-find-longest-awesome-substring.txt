@@ -1,0 +1,49 @@
+class Solution {
+    public int longestAwesome(String s) {
+
+        HashMap<Integer, Integer> map = new HashMap<>();
+        map.put(0, -1);
+
+        int mask = 0, answer = 0;
+
+        for (int i = 0; i < s.length(); i++) {
+
+            char ch = s.charAt(i);
+
+            switch (ch) {
+                case '0': mask ^= (1 << 0); break;
+                case '1': mask ^= (1 << 1); break;
+                case '2': mask ^= (1 << 2); break;
+                case '3': mask ^= (1 << 3); break;
+                case '4': mask ^= (1 << 4); break;
+                case '5': mask ^= (1 << 5); break;
+                case '6': mask ^= (1 << 6); break;
+                case '7': mask ^= (1 << 7); break;
+                case '8': mask ^= (1 << 8); break;
+                case '9': mask ^= (1 << 9); break;
+            }
+
+            // Same mask → 0 odd digits
+            if (map.containsKey(mask)) {
+                answer = Math.max(answer, i - map.get(mask));
+            }
+
+            // One bit different → 1 odd digit
+            for (int bit = 0; bit < 10; bit++) {
+
+                int newMask = mask ^ (1 << bit);
+
+                if (map.containsKey(newMask)) {
+                    answer = Math.max(answer, i - map.get(newMask));
+                }
+            }
+
+            // Store only first occurrence
+            if (!map.containsKey(mask)) {
+                map.put(mask, i);
+            }
+        }
+
+        return answer;
+    }
+}
