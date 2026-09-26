@@ -1,0 +1,18 @@
+class Solution {
+    public int numOfSubarrays(int[] arr) {
+        
+        long oddSum = 0, prefixSum = 0;
+
+        for(int a : arr){
+
+            prefixSum += a;
+            oddSum += prefixSum % 2;
+        }
+
+        long evenSum = arr.length - oddSum;
+
+        oddSum += evenSum * oddSum;
+
+        return (int)(oddSum % 1_000_000_007);
+    }
+}
