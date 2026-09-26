@@ -1,0 +1,31 @@
+class Solution {
+    public int findTheLongestSubstring(String s) {
+        
+        HashMap<Integer, Integer> map = new HashMap<>();
+        map.put(0, -1);
+
+        int mask = 0, answer = 0;
+
+        for(int i = 0; i < s.length(); i++){
+
+            char ch = s.charAt(i);
+
+            switch(ch){
+
+                case 'a' : mask ^= (1 << 0); break;
+                case 'e' : mask ^= (1 << 1); break;
+                case 'i' : mask ^= (1 << 2); break;
+                case 'o' : mask ^= (1 << 3); break;
+                case 'u' : mask ^= (1 << 4); break;
+            }
+
+            if (map.containsKey(mask)) {
+                answer = Math.max(answer, i - map.get(mask));
+            } else {
+                map.put(mask, i);
+            }
+        }
+
+        return answer;
+    }
+}
