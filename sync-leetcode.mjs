@@ -1,92 +1,181 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { LeetCode, Credential } from "leetcode-query";
 
 const DEST = "LeetCode-Questions";
 const SESSION = process.env.LEETCODE_SESSION;
+const CSRF = process.env.LEETCODE_CSRF_TOKEN;
 
 if (!SESSION) {
   throw new Error("LEETCODE_SESSION secret is missing.");
 }
 
-const credential = new Credential();
-await credential.init(SESSION);
+if (!CSRF) {
+  throw new Error("LEETCODE_CSRF_TOKEN secret is missing.");
+}
 
-const leetcode = new LeetCode(credential);
+const GRAPHQL_URL = "https://leetcode.com/graphql";
 
-console.log("Fetching recent LeetCode submissions...");
+async function graphql(query, variables, operationName) {
+  const response = await fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": CSRF,
+      Referer: "https://leetcode.com/",
+      "User-Agent": "Mozilla/5.0",
+    },
+    body: JSON.stringify({
+      operationName,
+      variables,
+      query,
+    }),
+  });
 
-const result = await leetcode.submissions({
-  limit: 20,
-  offset: 0,
-});
+  if (!response.ok) {
+    throw new Error(
+      `LeetCode GraphQL request failed: HTTP ${response.status}`
+    );
+  }
 
-const submissions = result?.submissions ?? result ?? [];
+  const data = await response.json();
 
-console.log(`Found ${submissions.length} submissions.`);
+  if (data.errors) {
+    throw new Error(JSON.stringify(data.errors));
+  }
+
+  return data.data;
+}
+
+const cookie = `LEETCODE_SESSION=${SESSION}; csrftoken=${CSRF}`;
+
+async function graphqlWithCookie(query, variables, operationName) {
+  const response = await fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: cookie,
+      "X-CSRFToken": CSRF,
+      Referer: "https://leetcode.com/",
+      "User-Agent": "Mozilla/5.0",
+    },
+    body: JSON.stringify({
+      operationName,
+      variables,
+      query,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `LeetCode GraphQL request failed: HTTP ${response.status}`
+    );
+  }
+
+  const data = await response.json();
+
+  if (data.errors) {
+    throw new Error(JSON.stringify(data.errors));
+  }
+
+  return data.data;
+}
+
+console.log("Fetching recent accepted LeetCode submissions...");
+
+const recentSubmissionsQuery = `
+  query recentAcSubmissionList($username: String!, $limit: Int!) {
+    recentAcSubmissionList(username: $username, limit: $limit) {
+      id
+      title
+      titleSlug
+      timestamp
+    }
+  }
+`;
+
+const usernameQuery = `
+  query globalData {
+    userStatus {
+      username
+    }
+  }
+`;
+
+const userData = await graphqlWithCookie(
+  usernameQuery,
+  {},
+  "globalData"
+);
+
+const username = userData?.userStatus?.username;
+
+if (!username) {
+  throw new Error(
+    "Could not determine your LeetCode username. Check your cookies."
+  );
+}
+
+console.log(`LeetCode user: ${username}`);
+
+const submissionData = await graphqlWithCookie(
+  recentSubmissionsQuery,
+  {
+    username,
+    limit: 20,
+  },
+  "recentAcSubmissionList"
+);
+
+const submissions = submissionData?.recentAcSubmissionList ?? [];
+
+console.log(`Found ${submissions.length} recent accepted submissions.`);
 
 fs.mkdirSync(DEST, { recursive: true });
 
 let added = 0;
 
 for (const submission of submissions) {
-  if (submission.statusDisplay !== "Accepted") continue;
-
   const id = submission.id;
+  const titleSlug = submission.titleSlug;
 
-  console.log(
-    `Accepted: ${submission.title ?? submission.titleSlug} (${submission.lang})`
-  );
+  console.log(`Checking: ${submission.title} (#${id})`);
 
-  let detail;
+  const detailQuery = `
+    query submissionDetails($submissionId: Int!) {
+      submissionDetails(submissionId: $submissionId) {
+        code
+        lang {
+          name
+        }
+        statusDisplay
+      }
+    }
+  `;
+
+  let detailData;
 
   try {
-    detail = await leetcode.submission(id);
-  } catch {
-    console.log(`Could not fetch submission details for ${id}`);
+    detailData = await graphqlWithCookie(
+      detailQuery,
+      {
+        submissionId: Number(id),
+      },
+      "submissionDetails"
+    );
+  } catch (error) {
+    console.log(`Could not fetch submission ${id}: ${error.message}`);
     continue;
   }
+
+  const detail = detailData?.submissionDetails;
 
   if (!detail?.code) {
-    console.log(`No source code returned for submission ${id}`);
+    console.log(`No source code returned for ${submission.title}`);
     continue;
   }
 
-const titleSlug =
-  submission.titleSlug ??
-  detail.question?.titleSlug ??
-  `submission-${id}`;
-
-const questionResponse = await fetch("https://leetcode.com/graphql", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Cookie: `LEETCODE_SESSION=${SESSION}`,
-  },
-  body: JSON.stringify({
-    operationName: "questionData",
-    variables: {
-      titleSlug,
-    },
-    query: `
-      query questionData($titleSlug: String!) {
-        question(titleSlug: $titleSlug) {
-          questionFrontendId
-          title
-          titleSlug
-        }
-      }
-    `,
-  }),
-});
-
-const questionData = await questionResponse.json();
-
-const questionId =
-  questionData?.data?.question?.questionFrontendId ?? "unknown";
-
-  const language = String(detail.lang ?? submission.lang ?? "").toLowerCase();
+  const language = String(detail.lang?.name ?? "").toLowerCase();
 
   const extensionMap = {
     java: "java",
@@ -104,6 +193,43 @@ const questionId =
 
   const extension = extensionMap[language] ?? "txt";
 
+  // Get the official public LeetCode problem number.
+  const questionQuery = `
+    query questionData($titleSlug: String!) {
+      question(titleSlug: $titleSlug) {
+        questionFrontendId
+        title
+        titleSlug
+      }
+    }
+  `;
+
+  let questionData;
+
+  try {
+    questionData = await graphql(
+      questionQuery,
+      {
+        titleSlug,
+      },
+      "questionData"
+    );
+  } catch (error) {
+    console.log(
+      `Could not fetch question number for ${titleSlug}: ${error.message}`
+    );
+    continue;
+  }
+
+  const question = questionData?.question;
+
+  if (!question?.questionFrontendId) {
+    console.log(`Could not determine problem number for ${titleSlug}`);
+    continue;
+  }
+
+  const questionId = question.questionFrontendId;
+
   const filename = `${questionId}-${titleSlug}.${extension}`;
   const filePath = path.join(DEST, filename);
 
@@ -114,7 +240,7 @@ const questionId =
 
   fs.writeFileSync(filePath, detail.code + "\n", "utf8");
 
-  console.log(`Added: ${filePath}`);
+  console.log(`Added: ${filename}`);
   added++;
 }
 
@@ -122,12 +248,12 @@ console.log(`Finished. Added ${added} new solution(s).`);
 
 if (added > 0) {
   execSync("git config user.name 'Muskan Shaik'");
+
   execSync(
     "git config user.email '129413369+Muskanr8@users.noreply.github.com'"
   );
 
   execSync("git add LeetCode-Questions");
-  
 
   try {
     execSync(
@@ -138,7 +264,9 @@ if (added > 0) {
     execSync("git push", { stdio: "inherit" });
 
     console.log("Successfully pushed solutions to GitHub.");
-  } catch {
+  } catch (error) {
     console.log("Nothing new to commit.");
   }
+} else {
+  console.log("No new solutions to commit.");
 }
