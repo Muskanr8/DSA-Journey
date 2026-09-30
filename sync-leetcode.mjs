@@ -56,6 +56,10 @@ const username = "Muskanr8";
 console.log(`LeetCode user: ${username}`);
 console.log("Fetching recent accepted LeetCode submissions...");
 
+// =========================================================
+// STEP 1: Get recent accepted problems
+// =========================================================
+
 const recentSubmissionsQuery = `
   query recentAcSubmissionList($username: String!, $limit: Int!) {
     recentAcSubmissionList(username: $username, limit: $limit) {
@@ -84,29 +88,39 @@ fs.mkdirSync(DEST, { recursive: true });
 
 let added = 0;
 
+// =========================================================
+// STEP 2: Process each accepted problem
+// =========================================================
+
 for (const submission of submissions) {
   const title = submission.title;
   const titleSlug = submission.titleSlug;
 
   console.log(`\nChecking: ${title}`);
 
-  // ---------------------------------------------------------
-  // STEP 1: Get submission history for this specific problem
-  // ---------------------------------------------------------
+  // -------------------------------------------------------
+  // Get accepted submission for this specific problem
+  // status 10 = Accepted
+  // -------------------------------------------------------
 
   const submissionListQuery = `
     query submissionList(
       $offset: Int!
       $limit: Int!
+      $lastKey: String
       $questionSlug: String!
+      $status: Int
     ) {
-      submissionList(
+      questionSubmissionList(
         offset: $offset
         limit: $limit
+        lastKey: $lastKey
         questionSlug: $questionSlug
-    ) {
+        status: $status
+      ) {
         submissions {
           id
+          status
           statusDisplay
           lang
           timestamp
@@ -123,7 +137,9 @@ for (const submission of submissions) {
       {
         offset: 0,
         limit: 20,
+        lastKey: null,
         questionSlug: titleSlug,
+        status: 10,
       },
       "submissionList"
     );
@@ -135,10 +151,12 @@ for (const submission of submissions) {
   }
 
   const problemSubmissions =
-    submissionListData?.submissionList?.submissions ?? [];
+    submissionListData?.questionSubmissionList?.submissions ?? [];
 
   const acceptedSubmission = problemSubmissions.find(
-    (item) => item.statusDisplay === "Accepted"
+    (item) =>
+      item.statusDisplay === "Accepted" ||
+      item.status === 10
   );
 
   if (!acceptedSubmission) {
@@ -150,9 +168,9 @@ for (const submission of submissions) {
 
   console.log(`Accepted submission ID: ${submissionId}`);
 
-  // ---------------------------------------------------------
-  // STEP 2: Get the actual submitted source code
-  // ---------------------------------------------------------
+  // -------------------------------------------------------
+  // STEP 3: Get actual submitted source code
+  // -------------------------------------------------------
 
   const detailQuery = `
     query submissionDetails($submissionId: Int!) {
@@ -190,6 +208,10 @@ for (const submission of submissions) {
     continue;
   }
 
+  // -------------------------------------------------------
+  // STEP 4: Determine programming language
+  // -------------------------------------------------------
+
   const language = String(
     detail.lang?.name ?? acceptedSubmission.lang ?? ""
   ).toLowerCase();
@@ -210,9 +232,9 @@ for (const submission of submissions) {
 
   const extension = extensionMap[language] ?? "txt";
 
-  // ---------------------------------------------------------
-  // STEP 3: Get official LeetCode problem number
-  // ---------------------------------------------------------
+  // -------------------------------------------------------
+  // STEP 5: Get official LeetCode problem number
+  // -------------------------------------------------------
 
   const questionQuery = `
     query questionData($titleSlug: String!) {
@@ -244,17 +266,21 @@ for (const submission of submissions) {
   const question = questionData?.question;
 
   if (!question?.questionFrontendId) {
-    console.log(`Could not determine problem number for ${title}`);
+    console.log(
+      `Could not determine problem number for ${title}`
+    );
     continue;
   }
 
   const questionId = question.questionFrontendId;
 
-  // ---------------------------------------------------------
-  // STEP 4: Save solution
-  // ---------------------------------------------------------
+  // -------------------------------------------------------
+  // STEP 6: Create filename
+  // -------------------------------------------------------
 
-  const filename = `${questionId}-${titleSlug}.${extension}`;
+  const filename =
+    `${questionId}-${titleSlug}.${extension}`;
+
   const filePath = path.join(DEST, filename);
 
   if (fs.existsSync(filePath)) {
@@ -262,17 +288,26 @@ for (const submission of submissions) {
     continue;
   }
 
-  fs.writeFileSync(filePath, detail.code + "\n", "utf8");
+  // -------------------------------------------------------
+  // STEP 7: Save solution
+  // -------------------------------------------------------
+
+  fs.writeFileSync(
+    filePath,
+    detail.code + "\n",
+    "utf8"
+  );
 
   console.log(`Added: ${filename}`);
+
   added++;
 }
 
-console.log(`\nFinished. Added ${added} new solution(s).`);
+// =========================================================
+// STEP 8: Commit and push to GitHub
+// =========================================================
 
-// ---------------------------------------------------------
-// STEP 5: Commit and push
-// ---------------------------------------------------------
+console.log(`\nFinished. Added ${added} new solution(s).`);
 
 if (added > 0) {
   execSync("git config user.name 'Muskan Shaik'");
@@ -289,9 +324,13 @@ if (added > 0) {
       { stdio: "inherit" }
     );
 
-    execSync("git push", { stdio: "inherit" });
+    execSync("git push", {
+      stdio: "inherit",
+    });
 
-    console.log("Successfully pushed solutions to GitHub.");
+    console.log(
+      "Successfully pushed solutions to GitHub."
+    );
   } catch (error) {
     console.log("Nothing new to commit.");
   }
