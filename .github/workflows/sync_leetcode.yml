@@ -29,4 +29,5 @@ jobs:
       - name: Sync accepted LeetCode solutions
         env:
           LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
+          LEETCODE_CSRF_TOKEN: ${{ secrets.LEETCODE_CSRF_TOKEN }}
         run: node sync-leetcode.mjs
