@@ -23,6 +23,9 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install LeetCode API
+        run: npm install @leetnotion/leetcode-api
+
       - name: Sync accepted LeetCode solutions
         env:
           LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
