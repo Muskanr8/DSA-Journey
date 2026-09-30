@@ -100,11 +100,11 @@ for (const submission of submissions) {
       $limit: Int!
       $questionSlug: String!
     ) {
-      questionSubmissionList(
+      submissionList(
         offset: $offset
         limit: $limit
         questionSlug: $questionSlug
-      ) {
+    ) {
         submissions {
           id
           statusDisplay
@@ -135,7 +135,7 @@ for (const submission of submissions) {
   }
 
   const problemSubmissions =
-    submissionListData?.questionSubmissionList?.submissions ?? [];
+    submissionListData?.submissionList?.submissions ?? [];
 
   const acceptedSubmission = problemSubmissions.find(
     (item) => item.statusDisplay === "Accepted"
