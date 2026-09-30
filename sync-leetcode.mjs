@@ -94,27 +94,7 @@ const recentSubmissionsQuery = `
   }
 `;
 
-const usernameQuery = `
-  query globalData {
-    userStatus {
-      username
-    }
-  }
-`;
-
-const userData = await graphqlWithCookie(
-  usernameQuery,
-  {},
-  "globalData"
-);
-
-const username = userData?.userStatus?.username;
-
-if (!username) {
-  throw new Error(
-    "Could not determine your LeetCode username. Check your cookies."
-  );
-}
+const username = "Muskanr8";
 
 console.log(`LeetCode user: ${username}`);
 
