@@ -3,6 +3,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 
 const DEST = "LeetCode-Questions";
+
 const SESSION = process.env.LEETCODE_SESSION;
 const CSRF = process.env.LEETCODE_CSRF_TOKEN;
 
@@ -16,40 +17,9 @@ if (!CSRF) {
 
 const GRAPHQL_URL = "https://leetcode.com/graphql";
 
-async function graphql(query, variables, operationName) {
-  const response = await fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CSRFToken": CSRF,
-      Referer: "https://leetcode.com/",
-      "User-Agent": "Mozilla/5.0",
-    },
-    body: JSON.stringify({
-      operationName,
-      variables,
-      query,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `LeetCode GraphQL request failed: HTTP ${response.status}`
-    );
-  }
-
-  const data = await response.json();
-
-  if (data.errors) {
-    throw new Error(JSON.stringify(data.errors));
-  }
-
-  return data.data;
-}
-
 const cookie = `LEETCODE_SESSION=${SESSION}; csrftoken=${CSRF}`;
 
-async function graphqlWithCookie(query, variables, operationName) {
+async function graphql(query, variables, operationName) {
   const response = await fetch(GRAPHQL_URL, {
     method: "POST",
     headers: {
@@ -81,6 +51,9 @@ async function graphqlWithCookie(query, variables, operationName) {
   return data.data;
 }
 
+const username = "Muskanr8";
+
+console.log(`LeetCode user: ${username}`);
 console.log("Fetching recent accepted LeetCode submissions...");
 
 const recentSubmissionsQuery = `
@@ -94,11 +67,7 @@ const recentSubmissionsQuery = `
   }
 `;
 
-const username = "Muskanr8";
-
-console.log(`LeetCode user: ${username}`);
-
-const submissionData = await graphqlWithCookie(
+const submissionData = await graphql(
   recentSubmissionsQuery,
   {
     username,
@@ -116,10 +85,74 @@ fs.mkdirSync(DEST, { recursive: true });
 let added = 0;
 
 for (const submission of submissions) {
-  const id = submission.id;
+  const title = submission.title;
   const titleSlug = submission.titleSlug;
 
-  console.log(`Checking: ${submission.title} (#${id})`);
+  console.log(`\nChecking: ${title}`);
+
+  // ---------------------------------------------------------
+  // STEP 1: Get submission history for this specific problem
+  // ---------------------------------------------------------
+
+  const submissionListQuery = `
+    query submissionList(
+      $offset: Int!
+      $limit: Int!
+      $questionSlug: String!
+    ) {
+      questionSubmissionList(
+        offset: $offset
+        limit: $limit
+        questionSlug: $questionSlug
+      ) {
+        submissions {
+          id
+          statusDisplay
+          lang
+          timestamp
+        }
+      }
+    }
+  `;
+
+  let submissionListData;
+
+  try {
+    submissionListData = await graphql(
+      submissionListQuery,
+      {
+        offset: 0,
+        limit: 20,
+        questionSlug: titleSlug,
+      },
+      "submissionList"
+    );
+  } catch (error) {
+    console.log(
+      `Could not fetch submission list for ${title}: ${error.message}`
+    );
+    continue;
+  }
+
+  const problemSubmissions =
+    submissionListData?.questionSubmissionList?.submissions ?? [];
+
+  const acceptedSubmission = problemSubmissions.find(
+    (item) => item.statusDisplay === "Accepted"
+  );
+
+  if (!acceptedSubmission) {
+    console.log(`No Accepted submission found for ${title}`);
+    continue;
+  }
+
+  const submissionId = Number(acceptedSubmission.id);
+
+  console.log(`Accepted submission ID: ${submissionId}`);
+
+  // ---------------------------------------------------------
+  // STEP 2: Get the actual submitted source code
+  // ---------------------------------------------------------
 
   const detailQuery = `
     query submissionDetails($submissionId: Int!) {
@@ -136,26 +169,30 @@ for (const submission of submissions) {
   let detailData;
 
   try {
-    detailData = await graphqlWithCookie(
+    detailData = await graphql(
       detailQuery,
       {
-        submissionId: Number(id),
+        submissionId,
       },
       "submissionDetails"
     );
   } catch (error) {
-    console.log(`Could not fetch submission ${id}: ${error.message}`);
+    console.log(
+      `Could not fetch code for ${title}: ${error.message}`
+    );
     continue;
   }
 
   const detail = detailData?.submissionDetails;
 
   if (!detail?.code) {
-    console.log(`No source code returned for ${submission.title}`);
+    console.log(`No source code returned for ${title}`);
     continue;
   }
 
-  const language = String(detail.lang?.name ?? "").toLowerCase();
+  const language = String(
+    detail.lang?.name ?? acceptedSubmission.lang ?? ""
+  ).toLowerCase();
 
   const extensionMap = {
     java: "java",
@@ -173,7 +210,10 @@ for (const submission of submissions) {
 
   const extension = extensionMap[language] ?? "txt";
 
-  // Get the official public LeetCode problem number.
+  // ---------------------------------------------------------
+  // STEP 3: Get official LeetCode problem number
+  // ---------------------------------------------------------
+
   const questionQuery = `
     query questionData($titleSlug: String!) {
       question(titleSlug: $titleSlug) {
@@ -196,7 +236,7 @@ for (const submission of submissions) {
     );
   } catch (error) {
     console.log(
-      `Could not fetch question number for ${titleSlug}: ${error.message}`
+      `Could not fetch problem number for ${title}: ${error.message}`
     );
     continue;
   }
@@ -204,11 +244,15 @@ for (const submission of submissions) {
   const question = questionData?.question;
 
   if (!question?.questionFrontendId) {
-    console.log(`Could not determine problem number for ${titleSlug}`);
+    console.log(`Could not determine problem number for ${title}`);
     continue;
   }
 
   const questionId = question.questionFrontendId;
+
+  // ---------------------------------------------------------
+  // STEP 4: Save solution
+  // ---------------------------------------------------------
 
   const filename = `${questionId}-${titleSlug}.${extension}`;
   const filePath = path.join(DEST, filename);
@@ -224,7 +268,11 @@ for (const submission of submissions) {
   added++;
 }
 
-console.log(`Finished. Added ${added} new solution(s).`);
+console.log(`\nFinished. Added ${added} new solution(s).`);
+
+// ---------------------------------------------------------
+// STEP 5: Commit and push
+// ---------------------------------------------------------
 
 if (added > 0) {
   execSync("git config user.name 'Muskan Shaik'");
