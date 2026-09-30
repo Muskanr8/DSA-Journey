@@ -23,9 +23,6 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install LeetCode Query
-        run: npm install leetcode-query
-
       - name: Sync accepted LeetCode solutions
         env:
           LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
